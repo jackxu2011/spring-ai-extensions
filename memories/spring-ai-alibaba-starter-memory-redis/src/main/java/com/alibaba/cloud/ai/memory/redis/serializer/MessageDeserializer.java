@@ -21,14 +21,13 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.util.CollectionUtils;
-
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Custom JSON deserializer for Message objects
@@ -56,17 +55,18 @@ public class MessageDeserializer extends JsonDeserializer<Message> {
 					.metadata(CollectionUtils.isEmpty(metadata) ? Map.of() : metadata)
 					.build()));
 		MESSAGE_FACTORIES.put("ASSISTANT",
-				((textContent, metadata, toolCalls, toolResponses) -> new AssistantMessage(textContent,
-						CollectionUtils.isEmpty(metadata) ? Map.of() : metadata,
-						CollectionUtils.isEmpty(toolCalls) ? List.of() : toolCalls)));
+				((textContent, metadata, toolCalls, toolResponses) ->
+						AssistantMessage.builder().content(textContent)
+								.properties(Optional.ofNullable(metadata).orElseGet(Map::of))
+								.toolCalls(Optional.ofNullable(toolCalls).orElseGet(List::of)).build()));
 		MESSAGE_FACTORIES.put("SYSTEM",
 				((textContent, metadata, toolCalls, toolResponses) -> SystemMessage.builder()
 					.text(textContent)
 					.metadata(CollectionUtils.isEmpty(metadata) ? Map.of() : metadata)
 					.build()));
 		MESSAGE_FACTORIES.put("TOOL",
-				((textContent, metadata, toolCalls, toolResponses) -> new ToolResponseMessage(toolResponses,
-						CollectionUtils.isEmpty(metadata) ? Map.of() : metadata)));
+				((textContent, metadata, toolCalls, toolResponses) ->
+						ToolResponseMessage.builder().responses(toolResponses).metadata(Optional.ofNullable( metadata).orElseGet(Map::of)).build()));
 	}
 
 	@Override

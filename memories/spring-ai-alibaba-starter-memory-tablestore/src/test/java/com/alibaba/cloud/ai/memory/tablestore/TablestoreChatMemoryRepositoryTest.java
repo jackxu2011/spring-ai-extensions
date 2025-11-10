@@ -15,6 +15,13 @@
  */
 package com.alibaba.cloud.ai.memory.tablestore;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,106 +33,102 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * Integration test using Testcontainers to automatically manage Redis test environment
- */
+/** Integration test using Testcontainers to automatically manage Redis test environment */
 class TablestoreChatMemoryRepositoryTest {
 
-	private static final Logger log = LoggerFactory.getLogger(TablestoreChatMemoryRepositoryTest.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(TablestoreChatMemoryRepositoryTest.class);
 
-	private static TablestoreChatMemoryRepository chatMemoryRepository;
+  private static TablestoreChatMemoryRepository chatMemoryRepository;
 
-	@BeforeAll
-	static void beforeAllSetUp() {
-		chatMemoryRepository = new TablestoreChatMemoryRepository(EnvUtil.getClient());
-	}
+  @BeforeAll
+  static void beforeAllSetUp() {
+    chatMemoryRepository = new TablestoreChatMemoryRepository(EnvUtil.getClient());
+  }
 
-	@BeforeEach
-	void cleanDatabase() {
-		chatMemoryRepository.getStore().deleteAllSessions();
-		chatMemoryRepository.getStore().deleteAllMessages();
-	}
+  @BeforeEach
+  void cleanDatabase() {
+    chatMemoryRepository.getStore().deleteAllSessions();
+    chatMemoryRepository.getStore().deleteAllMessages();
+  }
 
-	@Test
-	void saveMessagesMultipleMessages() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new AssistantMessage("idx:1 Message from assistant - " + conversationId),
-				new UserMessage("idx:2 Message from user - " + conversationId),
-				new SystemMessage("idx:3 Message from system - " + conversationId),
-				new ToolResponseMessage(List.of(
-						new ToolResponseMessage.ToolResponse("idx:4-1", "tool1",
-								"Message from tool - " + conversationId),
-						new ToolResponseMessage.ToolResponse("idx:4-2", "tool2",
-								"Message from tool - " + conversationId),
-						new ToolResponseMessage.ToolResponse("idx:4-3", "tool3",
-								"Message from tool - " + conversationId))));
+  @Test
+  void saveMessagesMultipleMessages() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new AssistantMessage("idx:1 Message from assistant - " + conversationId),
+            new UserMessage("idx:2 Message from user - " + conversationId),
+            new SystemMessage("idx:3 Message from system - " + conversationId),
+            ToolResponseMessage.builder()
+                .responses(
+                    List.of(
+                        new ToolResponseMessage.ToolResponse(
+                            "idx:4-1", "tool1", "Message from tool - " + conversationId),
+                        new ToolResponseMessage.ToolResponse(
+                            "idx:4-2", "tool2", "Message from tool - " + conversationId),
+                        new ToolResponseMessage.ToolResponse(
+                            "idx:4-3", "tool3", "Message from tool - " + conversationId)))
+                .build());
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		List<Message> savedMessages = chatMemoryRepository.findByConversationId(conversationId);
-		log.info("savedMessages:{}", savedMessages);
-		assertThat(savedMessages).hasSameSizeAs(messages);
+    List<Message> savedMessages = chatMemoryRepository.findByConversationId(conversationId);
+    log.info("savedMessages:{}", savedMessages);
+    assertThat(savedMessages).hasSameSizeAs(messages);
 
-		for (var i = 0; i < messages.size(); i++) {
-			var message = messages.get(i);
-			var savedMessage = savedMessages.get(i);
+    for (var i = 0; i < messages.size(); i++) {
+      var message = messages.get(i);
+      var savedMessage = savedMessages.get(i);
 
-			assertThat(savedMessage.getText()).isEqualTo(message.getText());
-			assertThat(savedMessage.getMessageType()).isEqualTo(message.getMessageType());
-		}
+      assertThat(savedMessage.getText()).isEqualTo(message.getText());
+      assertThat(savedMessage.getMessageType()).isEqualTo(message.getMessageType());
+    }
 
-		var count = chatMemoryRepository.findByConversationId(conversationId).size();
-		assertThat(count).isEqualTo(messages.size());
+    var count = chatMemoryRepository.findByConversationId(conversationId).size();
+    assertThat(count).isEqualTo(messages.size());
 
-		chatMemoryRepository.saveAll(conversationId, List.of(new UserMessage("Hello")));
+    chatMemoryRepository.saveAll(conversationId, List.of(new UserMessage("Hello")));
 
-		count = chatMemoryRepository.findByConversationId(conversationId).size();
-		assertThat(count).isEqualTo(1);
-	}
+    count = chatMemoryRepository.findByConversationId(conversationId).size();
+    assertThat(count).isEqualTo(1);
+  }
 
-	@Test
-	void deleteMessagesByConversationId() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new AssistantMessage("Message from assistant - " + conversationId),
-				new UserMessage("Message from user - " + conversationId),
-				new SystemMessage("Message from system - " + conversationId));
+  @Test
+  void deleteMessagesByConversationId() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new AssistantMessage("Message from assistant - " + conversationId),
+            new UserMessage("Message from user - " + conversationId),
+            new SystemMessage("Message from system - " + conversationId));
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		chatMemoryRepository.deleteByConversationId(conversationId);
+    chatMemoryRepository.deleteByConversationId(conversationId);
 
-		var results = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(results).isEmpty();
-	}
+    var results = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(results).isEmpty();
+  }
 
-	@Test
-	void findConversationIds() {
-		int count = ThreadLocalRandom.current().nextInt(1, 20);
-		Set<String> savedConversationIds = new HashSet<>();
-		for (int i = 0; i < count; i++) {
-			var conversationId = UUID.randomUUID().toString();
-			var messages = List.<Message>of(new UserMessage("Message from user - " + conversationId));
-			chatMemoryRepository.saveAll(conversationId, messages);
-			savedConversationIds.add(conversationId);
+  @Test
+  void findConversationIds() {
+    int count = ThreadLocalRandom.current().nextInt(1, 20);
+    Set<String> savedConversationIds = new HashSet<>();
+    for (int i = 0; i < count; i++) {
+      var conversationId = UUID.randomUUID().toString();
+      var messages = List.<Message>of(new UserMessage("Message from user - " + conversationId));
+      chatMemoryRepository.saveAll(conversationId, messages);
+      savedConversationIds.add(conversationId);
+    }
+    List<String> conversationIds = chatMemoryRepository.findConversationIds();
+    assertThat(conversationIds.size()).isEqualTo(savedConversationIds.size());
+    assertThat(conversationIds).containsAll(savedConversationIds);
 
-		}
-		List<String> conversationIds = chatMemoryRepository.findConversationIds();
-		assertThat(conversationIds.size()).isEqualTo(savedConversationIds.size());
-		assertThat(conversationIds).containsAll(savedConversationIds);
-
-		for (String conversationId : conversationIds) {
-			chatMemoryRepository.deleteByConversationId(conversationId);
-		}
-		conversationIds = chatMemoryRepository.findConversationIds();
-		assertThat(conversationIds).isEmpty();
-	}
-
+    for (String conversationId : conversationIds) {
+      chatMemoryRepository.deleteByConversationId(conversationId);
+    }
+    conversationIds = chatMemoryRepository.findConversationIds();
+    assertThat(conversationIds).isEmpty();
+  }
 }

@@ -16,6 +16,8 @@
 package com.alibaba.cloud.ai.dashscope.chat;
 
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.chat.observation.DashScopeChatModelObservationConvention;
+import com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.ChatCompletion;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.ChatCompletionChunk;
@@ -29,12 +31,18 @@ import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.ChatCompletionReques
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.ChatCompletionRequestInput;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.ChatCompletionRequestParameter;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.FunctionTool;
-import com.alibaba.cloud.ai.dashscope.chat.observation.DashScopeChatModelObservationConvention;
-import com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants;
 import com.alibaba.cloud.ai.tool.observation.inner.ToolCallReactiveContextHolder;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -74,15 +82,6 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * {@link ChatModel} implementation for {@literal Alibaba DashScope} backed by
@@ -376,7 +375,11 @@ public class DashScopeChatModel implements ChatModel {
 		String finishReason = finishReasonToMetadataValue(choice.finishReason());
 		var generationMetadataBuilder = ChatGenerationMetadata.builder().finishReason(finishReason);
 
-		var assistantMessage = new AssistantMessage(choice.message().content(), metadata, toolCalls);
+		var assistantMessage = AssistantMessage.builder()
+				.content(choice.message().content())
+				.properties(metadata)
+				.toolCalls(toolCalls)
+				.build();
 		return new Generation(assistantMessage, generationMetadataBuilder.build());
 	}
 

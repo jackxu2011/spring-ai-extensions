@@ -18,6 +18,12 @@ package com.alibaba.cloud.ai.memory.redis;
 import com.alibaba.cloud.ai.memory.redis.builder.RedisChatMemoryBuilder;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
+import io.lettuce.core.api.StatefulConnection;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,12 +40,6 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Redis implementation of ChatMemoryRepository using Lettuce
@@ -76,14 +76,14 @@ public class LettuceRedisChatMemoryRepository extends BaseRedisChatMemoryReposit
 
 	public static class RedisBuilder extends RedisChatMemoryBuilder<RedisBuilder> {
 
-		private GenericObjectPoolConfig<?> poolConfig;
+		private GenericObjectPoolConfig<StatefulConnection<?,?>> poolConfig;
 
 		@Override
 		protected RedisBuilder self() {
 			return this;
 		}
 
-		public RedisBuilder poolConfig(GenericObjectPoolConfig<?> poolConfig) {
+		public RedisBuilder poolConfig(GenericObjectPoolConfig<StatefulConnection<?,?>> poolConfig) {
 			this.poolConfig = poolConfig;
 			return this;
 		}
@@ -147,11 +147,11 @@ public class LettuceRedisChatMemoryRepository extends BaseRedisChatMemoryReposit
 			return builder.build();
 		}
 
-		private GenericObjectPoolConfig<?> createDefaultPoolConfig() {
+		private GenericObjectPoolConfig<StatefulConnection<?,?>> createDefaultPoolConfig() {
 			if (poolConfig != null) {
 				return poolConfig;
 			}
-			GenericObjectPoolConfig<?> config = new GenericObjectPoolConfig<>();
+			GenericObjectPoolConfig<StatefulConnection<?,?>> config = new GenericObjectPoolConfig<>();
 			config.setMaxTotal(8);
 			config.setMaxIdle(8);
 			config.setMinIdle(2);

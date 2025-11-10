@@ -18,10 +18,13 @@ package com.alibaba.cloud.ai.dashscope.agent;
 import com.alibaba.cloud.ai.agent.Agent;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi.DashScopeAgentRequest;
-import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi.DashScopeAgentResponse;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi.DashScopeAgentRequest.DashScopeAgentRequestInput.DashScopeAgentRequestMessage;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi.DashScopeAgentRequest.DashScopeAgentRequestParameters.DashScopeAgentRequestRagOptions;
+import com.alibaba.cloud.ai.dashscope.api.DashScopeAgentApi.DashScopeAgentResponse;
 import com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -36,10 +39,6 @@ import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.http.ResponseEntity;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Title DashScope low level agent.<br>
@@ -156,7 +155,7 @@ public final class DashScopeAgent extends Agent {
 		metadata.put(DashScopeApiConstants.USAGE, usage);
 		metadata.put(DashScopeApiConstants.OUTPUT, output);
 
-		var assistantMessage = new AssistantMessage(text, metadata);
+		var assistantMessage = AssistantMessage.builder().content(text).properties( metadata).build();
 		var generationMetadata = ChatGenerationMetadata.builder().finishReason(output.finishReason()).build();
 		Generation generation = new Generation(assistantMessage, generationMetadata);
 

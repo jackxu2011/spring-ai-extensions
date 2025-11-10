@@ -15,6 +15,12 @@
  */
 package com.alibaba.cloud.ai.memory.redis;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -33,13 +39,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-import java.net.URI;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Integration test using Testcontainers to automatically manage Redis test environment
  *
@@ -50,245 +49,266 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 public class RedissonRedisChatMemoryRepositoryTest {
 
-	private static final int REDIS_PORT = 6379;
+  private static final int REDIS_PORT = 6379;
 
-	// Define and start Redis container
-	@Container
-	private static final GenericContainer<?> redisContainer = new GenericContainer<>(DockerImageName.parse("redis:7.0"))
-		.withExposedPorts(REDIS_PORT);
+  // Define and start Redis container
+  @Container
+  private static final GenericContainer<?> redisContainer =
+      new GenericContainer<>(DockerImageName.parse("redis:7.0")).withExposedPorts(REDIS_PORT);
 
-	/**
-	 * Dynamically configure Redis properties
-	 */
-	@DynamicPropertySource
-	static void registerProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.redis.host", redisContainer::getHost);
-		registry.add("spring.redis.port", () -> redisContainer.getMappedPort(REDIS_PORT));
-	}
+  /** Dynamically configure Redis properties */
+  @DynamicPropertySource
+  static void registerProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.redis.host", redisContainer::getHost);
+    registry.add("spring.redis.port", () -> redisContainer.getMappedPort(REDIS_PORT));
+  }
 
-	@Autowired
-	private ChatMemoryRepository chatMemoryRepository;
+  @Autowired private ChatMemoryRepository chatMemoryRepository;
 
-	@Test
-	void correctChatMemoryRepositoryInstance() {
-		assertThat(chatMemoryRepository).isInstanceOf(RedissonRedisChatMemoryRepository.class);
-	}
+  @Test
+  void correctChatMemoryRepositoryInstance() {
+    assertThat(chatMemoryRepository).isInstanceOf(RedissonRedisChatMemoryRepository.class);
+  }
 
-	@ParameterizedTest
-	@CsvSource({ "Message from assistant,ASSISTANT", "Message from user,USER", "Message from system,SYSTEM" })
-	void saveMessagesSingleMessage(String content, MessageType messageType) {
-		var conversationId = UUID.randomUUID().toString();
-		var message = switch (messageType) {
-			case ASSISTANT -> new AssistantMessage(content + " - " + conversationId);
-			case USER -> new UserMessage(content + " - " + conversationId);
-			case SYSTEM -> new SystemMessage(content + " - " + conversationId);
-			default -> throw new IllegalArgumentException("Type not supported: " + messageType);
-		};
+  @ParameterizedTest
+  @CsvSource({
+    "Message from assistant,ASSISTANT",
+    "Message from user,USER",
+    "Message from system,SYSTEM"
+  })
+  void saveMessagesSingleMessage(String content, MessageType messageType) {
+    var conversationId = UUID.randomUUID().toString();
+    var message =
+        switch (messageType) {
+          case ASSISTANT -> new AssistantMessage(content + " - " + conversationId);
+          case USER -> new UserMessage(content + " - " + conversationId);
+          case SYSTEM -> new SystemMessage(content + " - " + conversationId);
+          default -> throw new IllegalArgumentException("Type not supported: " + messageType);
+        };
 
-		chatMemoryRepository.saveAll(conversationId, List.of(message));
+    chatMemoryRepository.saveAll(conversationId, List.of(message));
 
-		var messages = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(messages).hasSize(1);
+    var messages = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(messages).hasSize(1);
 
-		var savedMessage = messages.get(0);
-		assertThat(savedMessage.getText()).isEqualTo(message.getText());
-		assertThat(savedMessage.getMessageType()).isEqualTo(messageType);
-	}
+    var savedMessage = messages.get(0);
+    assertThat(savedMessage.getText()).isEqualTo(message.getText());
+    assertThat(savedMessage.getMessageType()).isEqualTo(messageType);
+  }
 
-	@Test
-	void saveMessagesMultipleMessages() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new AssistantMessage("Message from assistant - " + conversationId),
-				new UserMessage("Message from user - " + conversationId),
-				new SystemMessage("Message from system - " + conversationId));
+  @Test
+  void saveMessagesMultipleMessages() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new AssistantMessage("Message from assistant - " + conversationId),
+            new UserMessage("Message from user - " + conversationId),
+            new SystemMessage("Message from system - " + conversationId));
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		var savedMessages = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(savedMessages.size()).isEqualTo(messages.size());
+    var savedMessages = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(savedMessages.size()).isEqualTo(messages.size());
 
-		for (var i = 0; i < messages.size(); i++) {
-			var message = messages.get(i);
-			var savedMessage = savedMessages.get(i);
+    for (var i = 0; i < messages.size(); i++) {
+      var message = messages.get(i);
+      var savedMessage = savedMessages.get(i);
 
-			assertThat(savedMessage.getText()).isEqualTo(message.getText());
-			assertThat(savedMessage.getMessageType()).isEqualTo(message.getMessageType());
-		}
+      assertThat(savedMessage.getText()).isEqualTo(message.getText());
+      assertThat(savedMessage.getMessageType()).isEqualTo(message.getMessageType());
+    }
 
-		var count = chatMemoryRepository.findByConversationId(conversationId).size();
-		assertThat(count).isEqualTo(messages.size());
+    var count = chatMemoryRepository.findByConversationId(conversationId).size();
+    assertThat(count).isEqualTo(messages.size());
 
-		chatMemoryRepository.saveAll(conversationId, List.of(new UserMessage("Hello")));
+    chatMemoryRepository.saveAll(conversationId, List.of(new UserMessage("Hello")));
 
-		count = chatMemoryRepository.findByConversationId(conversationId).size();
-		assertThat(count).isEqualTo(1);
-	}
+    count = chatMemoryRepository.findByConversationId(conversationId).size();
+    assertThat(count).isEqualTo(1);
+  }
 
-	@Test
-	void findMessagesByConversationId() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new AssistantMessage("Message from assistant 1 - " + conversationId),
-				new AssistantMessage("Message from assistant 2 - " + conversationId),
-				new UserMessage("Message from user - " + conversationId),
-				new SystemMessage("Message from system - " + conversationId));
+  @Test
+  void findMessagesByConversationId() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new AssistantMessage("Message from assistant 1 - " + conversationId),
+            new AssistantMessage("Message from assistant 2 - " + conversationId),
+            new UserMessage("Message from user - " + conversationId),
+            new SystemMessage("Message from system - " + conversationId));
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		var results = chatMemoryRepository.findByConversationId(conversationId);
+    var results = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(results.size()).isEqualTo(messages.size());
-		assertThat(results).isEqualTo(messages);
-	}
+    assertThat(results.size()).isEqualTo(messages.size());
+    assertThat(results).isEqualTo(messages);
+  }
 
-	@Test
-	void deleteMessagesByConversationId() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new AssistantMessage("Message from assistant - " + conversationId),
-				new UserMessage("Message from user - " + conversationId),
-				new SystemMessage("Message from system - " + conversationId));
+  @Test
+  void deleteMessagesByConversationId() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new AssistantMessage("Message from assistant - " + conversationId),
+            new UserMessage("Message from user - " + conversationId),
+            new SystemMessage("Message from system - " + conversationId));
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		chatMemoryRepository.deleteByConversationId(conversationId);
+    chatMemoryRepository.deleteByConversationId(conversationId);
 
-		var results = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(results).isEmpty();
-	}
+    var results = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(results).isEmpty();
+  }
 
-	@Test
-	void clearOverLimit() {
-		var conversationId = UUID.randomUUID().toString();
-		var messages = List.<Message>of(new UserMessage("Message 1 from user - " + conversationId),
-				new AssistantMessage("Message 1 from assistant - " + conversationId),
-				new UserMessage("Message 2 from user - " + conversationId),
-				new AssistantMessage("Message 2 from assistant - " + conversationId),
-				new UserMessage("Message 3 from user - " + conversationId));
+  @Test
+  void clearOverLimit() {
+    var conversationId = UUID.randomUUID().toString();
+    var messages =
+        List.<Message>of(
+            new UserMessage("Message 1 from user - " + conversationId),
+            new AssistantMessage("Message 1 from assistant - " + conversationId),
+            new UserMessage("Message 2 from user - " + conversationId),
+            new AssistantMessage("Message 2 from assistant - " + conversationId),
+            new UserMessage("Message 3 from user - " + conversationId));
 
-		chatMemoryRepository.saveAll(conversationId, messages);
+    chatMemoryRepository.saveAll(conversationId, messages);
 
-		// Verify all messages have been saved
-		var savedMessages = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(savedMessages.size()).isEqualTo(messages.size());
+    // Verify all messages have been saved
+    var savedMessages = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(savedMessages.size()).isEqualTo(messages.size());
 
-		// Perform cleanup operation, set max limit to 3, delete count to 2
-		RedissonRedisChatMemoryRepository redisRepository = (RedissonRedisChatMemoryRepository) chatMemoryRepository;
-		redisRepository.clearOverLimit(conversationId, 3, 2);
+    // Perform cleanup operation, set max limit to 3, delete count to 2
+    RedissonRedisChatMemoryRepository redisRepository =
+        (RedissonRedisChatMemoryRepository) chatMemoryRepository;
+    redisRepository.clearOverLimit(conversationId, 3, 2);
 
-		// Verify only the last 3 messages are retained
-		savedMessages = chatMemoryRepository.findByConversationId(conversationId);
-		assertThat(savedMessages.size()).isEqualTo(3);
-		assertThat(savedMessages.get(0).getText()).isEqualTo(messages.get(2).getText());
-		assertThat(savedMessages.get(1).getText()).isEqualTo(messages.get(3).getText());
-		assertThat(savedMessages.get(2).getText()).isEqualTo(messages.get(4).getText());
-	}
+    // Verify only the last 3 messages are retained
+    savedMessages = chatMemoryRepository.findByConversationId(conversationId);
+    assertThat(savedMessages.size()).isEqualTo(3);
+    assertThat(savedMessages.get(0).getText()).isEqualTo(messages.get(2).getText());
+    assertThat(savedMessages.get(1).getText()).isEqualTo(messages.get(3).getText());
+    assertThat(savedMessages.get(2).getText()).isEqualTo(messages.get(4).getText());
+  }
 
-	@Test
-	void saveAndLoadUserMessageWithUriMedia() {
-		var conversationId = UUID.randomUUID().toString();
-		var userMessage = UserMessage.builder()
-			.text("Explain what do you see on this picture?")
-			.media(List.of(Media.builder()
-				.mimeType(MimeTypeUtils.IMAGE_PNG)
-				.data(URI.create("https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png"))
-				.build()))
-			.build();
+  @Test
+  void saveAndLoadUserMessageWithUriMedia() {
+    var conversationId = UUID.randomUUID().toString();
+    var userMessage =
+        UserMessage.builder()
+            .text("Explain what do you see on this picture?")
+            .media(
+                List.of(
+                    Media.builder()
+                        .mimeType(MimeTypeUtils.IMAGE_PNG)
+                        .data(
+                            URI.create(
+                                "https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png"))
+                        .build()))
+            .build();
 
-		chatMemoryRepository.saveAll(conversationId, List.of(userMessage));
-		var loaded = chatMemoryRepository.findByConversationId(conversationId);
+    chatMemoryRepository.saveAll(conversationId, List.of(userMessage));
+    var loaded = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(loaded).isNotNull();
-		assertThat(loaded).hasSize(1);
-		assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.USER);
-		assertThat(loaded.get(0).getText()).isEqualTo(userMessage.getText());
-	}
+    assertThat(loaded).isNotNull();
+    assertThat(loaded).hasSize(1);
+    assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.USER);
+    assertThat(loaded.get(0).getText()).isEqualTo(userMessage.getText());
+  }
 
-	@Test
-	void saveAndLoadUserMessageWithBytesMedia() {
-		var conversationId = UUID.randomUUID().toString();
-		byte[] bytes = new byte[] { 1, 2, 3 };
-		var userMessage = UserMessage.builder()
-			.text("Here is an inline image")
-			.media(List.of(Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG).data(bytes).build()))
-			.build();
+  @Test
+  void saveAndLoadUserMessageWithBytesMedia() {
+    var conversationId = UUID.randomUUID().toString();
+    byte[] bytes = new byte[] {1, 2, 3};
+    var userMessage =
+        UserMessage.builder()
+            .text("Here is an inline image")
+            .media(List.of(Media.builder().mimeType(MimeTypeUtils.IMAGE_PNG).data(bytes).build()))
+            .build();
 
-		chatMemoryRepository.saveAll(conversationId, List.of(userMessage));
-		var loaded = chatMemoryRepository.findByConversationId(conversationId);
+    chatMemoryRepository.saveAll(conversationId, List.of(userMessage));
+    var loaded = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(loaded).isNotNull();
-		assertThat(loaded).hasSize(1);
-		assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.USER);
-		assertThat(loaded.get(0).getText()).isEqualTo(userMessage.getText());
-	}
+    assertThat(loaded).isNotNull();
+    assertThat(loaded).hasSize(1);
+    assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.USER);
+    assertThat(loaded.get(0).getText()).isEqualTo(userMessage.getText());
+  }
 
-	@Test
-	void saveAndLoadToolResponseMessageBasic() {
-		var conversationId = UUID.randomUUID().toString();
+  @Test
+  void saveAndLoadToolResponseMessageBasic() {
+    var conversationId = UUID.randomUUID().toString();
 
-		var resp = new ToolResponseMessage.ToolResponse("tool-1", "vision-analyzer", "{\"result\":\"ok\"}");
-		var toolMsg = new ToolResponseMessage(List.of(resp));
+    var resp =
+        new ToolResponseMessage.ToolResponse("tool-1", "vision-analyzer", "{\"result\":\"ok\"}");
+    var toolMsg = ToolResponseMessage.builder().responses(List.of(resp)).build();
 
-		chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
-		var loaded = chatMemoryRepository.findByConversationId(conversationId);
+    chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
+    var loaded = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(loaded).hasSize(1);
-		assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.TOOL);
+    assertThat(loaded).hasSize(1);
+    assertThat(loaded.get(0).getMessageType()).isEqualTo(MessageType.TOOL);
 
-		var trm = (ToolResponseMessage) loaded.get(0);
-		assertThat(trm.getResponses()).hasSize(1);
-		assertThat(trm.getResponses().get(0).id()).isEqualTo("tool-1");
-		assertThat(trm.getResponses().get(0).name()).isEqualTo("vision-analyzer");
-		assertThat(trm.getResponses().get(0).responseData()).contains("\"result\":\"ok\"");
-	}
+    var trm = (ToolResponseMessage) loaded.get(0);
+    assertThat(trm.getResponses()).hasSize(1);
+    assertThat(trm.getResponses().get(0).id()).isEqualTo("tool-1");
+    assertThat(trm.getResponses().get(0).name()).isEqualTo("vision-analyzer");
+    assertThat(trm.getResponses().get(0).responseData()).contains("\"result\":\"ok\"");
+  }
 
-	@Test
-	void saveAndLoadToolResponseMessageWithMetadata() {
-		var conversationId = UUID.randomUUID().toString();
+  @Test
+  void saveAndLoadToolResponseMessageWithMetadata() {
+    var conversationId = UUID.randomUUID().toString();
 
-		var resp = new ToolResponseMessage.ToolResponse("tool-2", "math-calc", "{\"value\":42}");
-		var metadata = Map.<String, Object>of("traceId", "t-" + conversationId, "caller", "agent://unit-test");
+    var resp = new ToolResponseMessage.ToolResponse("tool-2", "math-calc", "{\"value\":42}");
+    var metadata =
+        Map.<String, Object>of("traceId", "t-" + conversationId, "caller", "agent://unit-test");
 
-		var toolMsg = new ToolResponseMessage(List.of(resp), metadata);
+    var toolMsg = ToolResponseMessage.builder().responses(List.of(resp)).metadata(metadata).build();
 
-		chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
-		var loaded = chatMemoryRepository.findByConversationId(conversationId);
+    chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
+    var loaded = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(loaded).hasSize(1);
-		var trm = (ToolResponseMessage) loaded.get(0);
-		assertThat(trm.getMessageType()).isEqualTo(MessageType.TOOL);
-		assertThat(trm.getMetadata()).containsEntry("caller", "agent://unit-test");
-		assertThat(trm.getResponses().get(0).name()).isEqualTo("math-calc");
-	}
+    assertThat(loaded).hasSize(1);
+    var trm = (ToolResponseMessage) loaded.get(0);
+    assertThat(trm.getMessageType()).isEqualTo(MessageType.TOOL);
+    assertThat(trm.getMetadata()).containsEntry("caller", "agent://unit-test");
+    assertThat(trm.getResponses().get(0).name()).isEqualTo("math-calc");
+  }
 
-	@Test
-	void saveAndLoadToolResponseMessageWithUriMedia() {
-		var conversationId = UUID.randomUUID().toString();
+  @Test
+  void saveAndLoadToolResponseMessageWithUriMedia() {
+    var conversationId = UUID.randomUUID().toString();
 
-		var resp = new ToolResponseMessage.ToolResponse("tool-3", "vision-analyzer",
-				URI.create("https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png").toString());
-		var toolMsg = new ToolResponseMessage(List.of(resp));
+    var resp =
+        new ToolResponseMessage.ToolResponse(
+            "tool-3",
+            "vision-analyzer",
+            URI.create("https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png")
+                .toString());
+    var toolMsg = ToolResponseMessage.builder().responses(List.of(resp)).build();
 
-		chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
-		var loaded = chatMemoryRepository.findByConversationId(conversationId);
+    chatMemoryRepository.saveAll(conversationId, List.of(toolMsg));
+    var loaded = chatMemoryRepository.findByConversationId(conversationId);
 
-		assertThat(loaded).hasSize(1);
-		var trm = (ToolResponseMessage) loaded.get(0);
-		assertThat(trm.getMessageType()).isEqualTo(MessageType.TOOL);
-		assertThat(trm.getResponses().get(0).responseData())
-			.contains("https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png");
-	}
+    assertThat(loaded).hasSize(1);
+    var trm = (ToolResponseMessage) loaded.get(0);
+    assertThat(trm.getMessageType()).isEqualTo(MessageType.TOOL);
+    assertThat(trm.getResponses().get(0).responseData())
+        .contains("https://docs.spring.io/spring-ai/reference/_images/multimodal.test.png");
+  }
 
-	@SpringBootConfiguration
-	static class TestConfiguration {
+  @SpringBootConfiguration
+  static class TestConfiguration {
 
-		@Bean
-		ChatMemoryRepository chatMemoryRepository() {
-			// Use Redis connection information from container to create Redis repository
-			return RedissonRedisChatMemoryRepository.builder()
-				.host(redisContainer.getHost())
-				.port(redisContainer.getMappedPort(REDIS_PORT))
-				.build();
-		}
-
-	}
-
+    @Bean
+    ChatMemoryRepository chatMemoryRepository() {
+      // Use Redis connection information from container to create Redis repository
+      return RedissonRedisChatMemoryRepository.builder()
+          .host(redisContainer.getHost())
+          .port(redisContainer.getMappedPort(REDIS_PORT))
+          .build();
+    }
+  }
 }
